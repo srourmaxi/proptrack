@@ -3,7 +3,7 @@ import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import './App.css'
 
-const API = 'https://proptrack.onrender.com'
+const API = 'https://proptrack-backend-wyqz.onrender.com'
 const TASA_DEFAULT = 1
 
 const GASTOS_ITEMS = [
