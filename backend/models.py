@@ -71,8 +71,6 @@ class Propiedad(Base):
     gv_monedas = Column(String, default='{}')
     gv_cotizaciones = Column(String, default='{}')
     notas = Column(Text)
-    estado_obra = Column(String, default='terminado')
-    fecha_entrega = Column(String)
     valor_estimado_entrega = Column(Float)
     partido = Column(String)
     provincia = Column(String)
