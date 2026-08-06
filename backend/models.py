@@ -152,8 +152,9 @@ class CodigoInvitacion(Base):
     fecha_creacion = Column(String)
     fecha_uso = Column(String)
     notas = Column(Text)
-    
-    class TokenReset(Base):
+
+
+class TokenReset(Base):
     __tablename__ = "tokens_reset"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, nullable=False)
