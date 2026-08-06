@@ -131,6 +131,14 @@ function AuthScreen({ onLogin }) {
     if (modo === 'registro' && !form.codigo_invitacion) { setError('Ingresá tu código de invitación'); return }
     setCargando(true)
     try {
+      if (modo === 'reset') {
+        await axios.post(`${API}/auth/solicitar-reset`, { email: form.email })
+        setError('')
+        alert('Si el email existe, recibirás un correo con instrucciones.')
+        setModo('login')
+        setCargando(false)
+        return
+      }
       const url = modo === 'login' ? `${API}/auth/login` : `${API}/auth/registro`
       const res = await axios.post(url, form)
       setToken(res.data.token)
@@ -165,6 +173,20 @@ function AuthScreen({ onLogin }) {
         <button className="btn-primary auth-submit" onClick={submit} disabled={cargando}>
           {cargando ? 'Cargando...' : modo==='login' ? 'Ingresar' : 'Crear cuenta'}
         </button>
+        {modo==='login' && (
+          <div style={{textAlign:'center',marginTop:'12px'}}>
+            <button onClick={()=>setModo('reset')} style={{background:'transparent',border:'none',color:'#848e9c',fontSize:'13px',cursor:'pointer',textDecoration:'underline'}}>
+              Olvidé mi contraseña
+            </button>
+          </div>
+        )}
+        {modo==='reset' && (
+          <div style={{textAlign:'center',marginTop:'12px'}}>
+            <button onClick={()=>setModo('login')} style={{background:'transparent',border:'none',color:'#848e9c',fontSize:'13px',cursor:'pointer',textDecoration:'underline'}}>
+              ← Volver al login
+            </button>
+          </div>
+        )}
         {modo==='registro' && (
           <div style={{marginTop:'16px',textAlign:'center'}}>
             <div style={{fontSize:'12px',color:'#848e9c',marginBottom:'10px'}}>

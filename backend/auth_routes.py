@@ -91,3 +91,88 @@ async def login(data: LoginData, db: AsyncSession = Depends(get_db)):
 @router_auth.get("/me")
 async def me(usuario=Depends(get_usuario_actual)):
     return {"id": usuario.id, "nombre": usuario.nombre, "email": usuario.email}
+
+    class SolicitarResetData(BaseModel):
+    email: str
+
+class ResetPasswordData(BaseModel):
+    token: str
+    nueva_password: str
+
+@router_auth.post("/solicitar-reset")
+async def solicitar_reset(data: SolicitarResetData, db: AsyncSession = Depends(get_db)):
+    import resend
+    from datetime import timedelta
+    
+    resend.api_key = "re_2j31wyvm_PK1t35xdbsnNMLATCdBs9iqd"
+    
+    result = await db.execute(select(Usuario).where(Usuario.email == data.email))
+    usuario = result.scalar_one_or_none()
+    
+    if not usuario:
+        return {"mensaje": "Si el email existe, recibirás un correo con instrucciones."}
+    
+    from models import TokenReset
+    token = secrets.token_urlsafe(32)
+    fecha_creacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    fecha_expiracion = (datetime.now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    nuevo_token = TokenReset(
+        email=data.email,
+        token=token,
+        usado=False,
+        fecha_creacion=fecha_creacion,
+        fecha_expiracion=fecha_expiracion
+    )
+    db.add(nuevo_token)
+    await db.commit()
+    
+    link = f"https://proptrack-puce.vercel.app/reset?token={token}"
+    
+    resend.Emails.send({
+        "from": "PropTrack <onboarding@resend.dev>",
+        "to": data.email,
+        "subject": "Recuperar contraseña — PropTrack",
+        "html": f"""
+        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; background: #0b0e11; color: #eaecef; padding: 40px; border-radius: 12px;">
+            <h2 style="color: #f0b90b;">🏠 PropTrack</h2>
+            <p>Recibimos una solicitud para restablecer tu contraseña.</p>
+            <p>Hacé clic en el botón para crear una nueva contraseña:</p>
+            <a href="{link}" style="display: inline-block; background: #f0b90b; color: #0b0e11; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin: 20px 0;">
+                Restablecer contraseña
+            </a>
+            <p style="color: #848e9c; font-size: 13px;">Este link expira en 2 horas. Si no solicitaste el reset, ignorá este email.</p>
+        </div>
+        """
+    })
+    
+    return {"mensaje": "Si el email existe, recibirás un correo con instrucciones."}
+
+@router_auth.post("/reset-password")
+async def reset_password(data: ResetPasswordData, db: AsyncSession = Depends(get_db)):
+    from models import TokenReset
+    
+    result = await db.execute(select(TokenReset).where(
+        TokenReset.token == data.token,
+        TokenReset.usado == False
+    ))
+    token_obj = result.scalar_one_or_none()
+    
+    if not token_obj:
+        raise HTTPException(status_code=400, detail="Token inválido o ya utilizado")
+    
+    if datetime.now().strftime('%Y-%m-%d %H:%M:%S') > token_obj.fecha_expiracion:
+        raise HTTPException(status_code=400, detail="El link expiró. Solicitá uno nuevo.")
+    
+    result2 = await db.execute(select(Usuario).where(Usuario.email == token_obj.email))
+    usuario = result2.scalar_one_or_none()
+    
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    usuario.password_hash = hashear_password(data.nueva_password)
+    token_obj.usado = True
+    token_obj.fecha_uso = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    await db.commit()
+    return {"mensaje": "Contraseña actualizada correctamente"}
