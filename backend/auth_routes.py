@@ -92,7 +92,7 @@ async def login(data: LoginData, db: AsyncSession = Depends(get_db)):
 async def me(usuario=Depends(get_usuario_actual)):
     return {"id": usuario.id, "nombre": usuario.nombre, "email": usuario.email}
 
-    class SolicitarResetData(BaseModel):
+class SolicitarResetData(BaseModel):
     email: str
 
 class ResetPasswordData(BaseModel):
