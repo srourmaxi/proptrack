@@ -104,7 +104,8 @@ async def solicitar_reset(data: SolicitarResetData, db: AsyncSession = Depends(g
     import resend
     from datetime import timedelta
     
-    resend.api_key = "re_2j31wyvm_PK1t35xdbsnNMLATCdBs9iqd"
+    import os
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
     
     result = await db.execute(select(Usuario).where(Usuario.email == data.email))
     usuario = result.scalar_one_or_none()
@@ -146,7 +147,7 @@ async def solicitar_reset(data: SolicitarResetData, db: AsyncSession = Depends(g
         """
     })
     
-    return {"mensaje": "Si el email existe, recibirás un correo con instrucciones."}
+    return {"mensaje": "Si el email existe003180, recibirás un correo con instrucciones."}
 
 @router_auth.post("/reset-password")
 async def reset_password(data: ResetPasswordData, db: AsyncSession = Depends(get_db)):
