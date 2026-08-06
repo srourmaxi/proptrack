@@ -85,7 +85,6 @@ class Valuacion(Base):
     valor_usd = Column(Float, nullable=False)
     fuente = Column(String, default="manual")
     estado_obra = Column(String, default='terminado')
-    fecha_entrega = Column(String)
     notas = Column(Text)
 
 class Alquiler(Base):
