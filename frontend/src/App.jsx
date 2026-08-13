@@ -167,11 +167,15 @@ function AuthScreen({ onLogin }) {
         )}
         <label>Email</label>
         <input type="email" placeholder="tu@email.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} />
-        <label>Contraseña</label>
-        <input type="password" placeholder="••••••••" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} onKeyDown={e=>e.key==='Enter'&&submit()} />
+        {modo !== 'reset' && (
+          <>
+            <label>Contraseña</label>
+            <input type="password" placeholder="••••••••" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} onKeyDown={e=>e.key==='Enter'&&submit()} />
+          </>
+        )}
         {error && <div className="auth-error">{error}</div>}
         <button className="btn-primary auth-submit" onClick={submit} disabled={cargando}>
-          {cargando ? 'Cargando...' : modo==='login' ? 'Ingresar' : 'Crear cuenta'}
+          {cargando ? 'Cargando...' : modo==='login' ? 'Ingresar' : modo==='reset' ? 'Enviar instrucciones' : 'Crear cuenta'}
         </button>
         {modo==='login' && (
           <div style={{textAlign:'center',marginTop:'12px'}}>
