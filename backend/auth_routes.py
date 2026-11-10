@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from database import get_db
 from models import Usuario, CodigoInvitacion
 from typing import Optional
@@ -98,6 +98,56 @@ class SolicitarResetData(BaseModel):
 class ResetPasswordData(BaseModel):
     token: str
     nueva_password: str
+
+# ── Reseteo de emergencia (solo admin) ───────────────────────────────────
+# Solo funciona si en Render existe la variable ADMIN_SECRET. Sin esa variable, queda apagado.
+import os, hmac
+from fastapi.responses import HTMLResponse
+
+class AdminResetData(BaseModel):
+    email: str
+    nueva_password: str
+    secret: str
+
+PAGINA_ADMIN_RESET = """<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reseteo de contraseña</title><style>
+body{background:#0b0e11;color:#eaecef;font-family:system-ui,sans-serif;display:flex;justify-content:center;padding:40px 16px}
+form{background:#1e2329;border:1px solid #2b3139;border-radius:14px;padding:24px;width:100%;max-width:380px}
+h2{color:#f0b90b;margin-top:0}label{font-size:12px;color:#848e9c;display:block;margin:12px 0 4px}
+input{width:100%;box-sizing:border-box;background:#0b0e11;color:#eaecef;border:1px solid #2b3139;border-radius:8px;padding:10px;font-size:15px}
+button{margin-top:18px;width:100%;background:#f0b90b;border:0;border-radius:8px;padding:12px;font-weight:700;font-size:15px;cursor:pointer}
+#m{margin-top:14px;font-size:14px}</style></head><body>
+<form onsubmit="return enviar(event)"><h2>Reseteo de contraseña</h2>
+<label>Email del usuario</label><input id="e" type="email" required>
+<label>Nueva contraseña (mínimo 8 caracteres)</label><input id="p" type="text" minlength="8" required>
+<label>Clave de administrador (ADMIN_SECRET)</label><input id="s" type="password" required>
+<button>Cambiar contraseña</button><div id="m"></div></form>
+<script>
+async function enviar(ev){ev.preventDefault();const m=document.getElementById('m');m.textContent='Enviando...';
+try{const r=await fetch('/auth/admin-reset-password',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({email:e.value.trim(),nueva_password:p.value,secret:s.value})});
+const d=await r.json();m.style.color=r.ok?'#0ecb81':'#f6465d';m.textContent=r.ok?'Listo: ya podés entrar con la nueva contraseña.':(d.detail||'Error');}
+catch(x){m.style.color='#f6465d';m.textContent='No se pudo conectar. Esperá unos segundos y probá de nuevo.';}return false;}
+</script></body></html>"""
+
+@router_auth.get("/admin-reset", response_class=HTMLResponse)
+async def admin_reset_pagina():
+    return PAGINA_ADMIN_RESET
+
+@router_auth.post("/admin-reset-password")
+async def admin_reset_password(data: AdminResetData, db: AsyncSession = Depends(get_db)):
+    esperado = os.environ.get("ADMIN_SECRET")
+    if not esperado or not hmac.compare_digest(data.secret.encode(), esperado.encode()):
+        raise HTTPException(status_code=403, detail="Clave de administrador incorrecta")
+    if len(data.nueva_password) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+    res = await db.execute(select(Usuario).where(func.lower(Usuario.email) == data.email.strip().lower()))
+    usuario = res.scalar_one_or_none()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="No existe un usuario con ese email")
+    usuario.password_hash = hashear_password(data.nueva_password)
+    await db.commit()
+    return {"ok": True}
 
 @router_auth.post("/solicitar-reset")
 async def solicitar_reset(data: SolicitarResetData, db: AsyncSession = Depends(get_db)):
