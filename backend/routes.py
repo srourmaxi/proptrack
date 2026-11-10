@@ -414,8 +414,18 @@ class ParserRequest(BaseModel):
 
 @router.post("/parsear-financiacion")
 async def parsear_financiacion(data: ParserRequest):
+    # Primero intenta con IA; si falla (sin clave, sin saldo, error de red), usa el parser por reglas.
+    try:
+        from ia_parser import parsear_con_ia
+        res = await parsear_con_ia(data.texto)
+        if res["movimientos"]:
+            return res
+    except Exception as e:
+        print("IA no disponible, uso parser por reglas:", e)
     from parser_helper import parsear_texto_financiacion
-    return parsear_texto_financiacion(data.texto, data.fecha_base)# ── Módulo alquiler ──────────────────────────────────────────────────────
+    return parsear_texto_financiacion(data.texto, data.fecha_base)
+
+# ── Módulo alquiler ──────────────────────────────────────────────────────
 
 class AlquilerContrato(BaseModel):
     propiedad_id: int
