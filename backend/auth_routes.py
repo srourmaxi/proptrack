@@ -5,7 +5,8 @@ from database import get_db
 from models import Usuario, CodigoInvitacion
 from typing import Optional
 from datetime import datetime
-import secrets
+import secrets, os, hmac
+from fastapi.responses import HTMLResponse
 from auth import verificar_password, hashear_password, crear_token, get_usuario_actual
 from pydantic import BaseModel
 from datetime import datetime
@@ -60,8 +61,14 @@ async def registro(data: RegistroData, db: AsyncSession = Depends(get_db)):
     token = crear_token({"sub": str(nuevo.id)})
     return {"token": token, "nombre": nuevo.nombre, "email": nuevo.email}
 
+def _verificar_admin(secret: str):
+    esperado = os.environ.get("ADMIN_SECRET")
+    if not esperado or not secret or not hmac.compare_digest(secret.encode(), esperado.encode()):
+        raise HTTPException(status_code=403, detail="Clave de administrador incorrecta")
+
 @router_auth.post("/generar-codigo")
-async def generar_codigo(notas: str = "", db: AsyncSession = Depends(get_db)):
+async def generar_codigo(secret: str = "", notas: str = "", db: AsyncSession = Depends(get_db)):
+    _verificar_admin(secret)
     codigo = secrets.token_urlsafe(8).upper()
     nuevo = CodigoInvitacion(
         codigo=codigo,
@@ -74,7 +81,8 @@ async def generar_codigo(notas: str = "", db: AsyncSession = Depends(get_db)):
     return {"codigo": codigo}
 
 @router_auth.get("/codigos")
-async def listar_codigos(db: AsyncSession = Depends(get_db)):
+async def listar_codigos(secret: str = "", db: AsyncSession = Depends(get_db)):
+    _verificar_admin(secret)
     result = await db.execute(select(CodigoInvitacion))
     return result.scalars().all()
 
@@ -101,9 +109,6 @@ class ResetPasswordData(BaseModel):
 
 # ── Reseteo de emergencia (solo admin) ───────────────────────────────────
 # Solo funciona si en Render existe la variable ADMIN_SECRET. Sin esa variable, queda apagado.
-import os, hmac
-from fastapi.responses import HTMLResponse
-
 class AdminResetData(BaseModel):
     email: str
     nueva_password: str
@@ -121,13 +126,21 @@ button{margin-top:18px;width:100%;background:#f0b90b;border:0;border-radius:8px;
 <label>Email del usuario</label><input id="e" type="email" required>
 <label>Nueva contraseña (mínimo 8 caracteres)</label><input id="p" type="text" minlength="8" required>
 <label>Clave de administrador (ADMIN_SECRET)</label><input id="s" type="password" required>
-<button>Cambiar contraseña</button><div id="m"></div></form>
+<button>Cambiar contraseña</button><div id="m"></div>
+<hr style="border:0;border-top:1px solid #2b3139;margin:22px 0">
+<h2 style="font-size:17px">Códigos de invitación</h2>
+<button type="button" onclick="codigo()" style="margin-top:6px">Generar código nuevo</button>
+<div id="c" style="margin-top:12px;font-family:monospace;font-size:16px;color:#f0b90b;word-break:break-all"></div></form>
 <script>
 async function enviar(ev){ev.preventDefault();const m=document.getElementById('m');m.textContent='Enviando...';
 try{const r=await fetch('/auth/admin-reset-password',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({email:e.value.trim(),nueva_password:p.value,secret:s.value})});
 const d=await r.json();m.style.color=r.ok?'#0ecb81':'#f6465d';m.textContent=r.ok?'Listo: ya podés entrar con la nueva contraseña.':(d.detail||'Error');}
 catch(x){m.style.color='#f6465d';m.textContent='No se pudo conectar. Esperá unos segundos y probá de nuevo.';}return false;}
+async function codigo(){const c=document.getElementById('c');c.style.color='#848e9c';c.textContent='Generando...';
+try{const r=await fetch('/auth/generar-codigo?secret='+encodeURIComponent(s.value),{method:'POST'});const d=await r.json();
+if(r.ok){c.style.color='#f0b90b';c.textContent=d.codigo;}else{c.style.color='#f6465d';c.textContent=d.detail||'Error (completá la clave de administrador)';}}
+catch(x){c.style.color='#f6465d';c.textContent='No se pudo conectar.';}}
 </script></body></html>"""
 
 @router_auth.get("/admin-reset", response_class=HTMLResponse)
